@@ -119,18 +119,57 @@ Reply with only the line numbers of your chosen items, comma-separated (e.g. 1, 
 
 async function writeDigest(topic) {
   const news = topic.selectedNews || [];
-  const prompt = `Write a SHORT daily AI news digest. One quick skim, no fluff.
+  const dateStr = new Date().toISOString().split('T')[0];
 
-Stories to cover (use these exact headlines as ## headings):
+  const prompt = `You are writing the daily edition of a high-quality AI developer newsletter. Tone: concise, insightful, pleasant to read — like TLDR, The Rundown AI, or Ben's Bites. Do not sound like a generic AI or a press release.
 
-${news.map((n, i) => `${i + 1}. ${n.title}\n   Source: ${n.source}\n   ${n.summary}`).join('\n\n')}
+Use ONLY the information in the provided story summaries below. Do not invent facts, quotes, or details.
 
-RULES (strict):
-- Total length: 250–400 words. Short and precise.
-- For each story: a ## heading (the headline), then 2–3 sentences only. What happened and why it matters to devs. No intros, no "in conclusion," no filler.
-- Plain language. No emojis. No "delve," "leverage," "game-changer," "revolutionize."
-- Output valid Markdown. Start with # ${topic.title}. Do not add a Sources line at the end (it will be added automatically).
-- Goal: reader skims in under a minute and gets the day's major AI news.`;
+---
+
+STORIES TO COVER (source and summary only — use this information and nothing else):
+
+${news.map((n, i) => `${i + 1}. ${n.title}\n   Source: ${n.source}\n   Summary: ${n.summary}`).join('\n\n')}
+
+---
+
+REQUIRED ARTICLE STRUCTURE:
+
+# Daily AI News — ${dateStr}
+
+[2–3 sentence intro: what’s happening in AI today. Short, sharp, contextual. Not generic. No "In today’s news" or "Welcome to today’s digest."]
+
+Then for each story, use this exact structure:
+
+## [Exact headline from above]
+
+**What happened:**  
+[1–2 sentences from the provided summary. Do not repeat the headline in the first sentence.]
+
+**Why it matters:**  
+[1–2 sentences: why developers, builders, or startups should care. Developer perspective.]
+
+**Context:**  
+[One quick sentence only if needed for clarity. Omit this line entirely if not needed.]
+
+[Blank line before next ## heading]
+
+Repeat for every story. After the last story, stop. Do not add a conclusion paragraph or "Sources" section (it will be added automatically).
+
+---
+
+STYLE RULES (strict):
+- Total length: 300–450 words. Every sentence must add information.
+- Clear, sharp, modern tech writing. Short sentences. Easy to skim in under 60 seconds.
+- Banned words and phrases: leverage, delve, revolutionary, groundbreaking, game-changing, utilize, "it’s worth noting," "in conclusion," "the landscape is evolving."
+- No filler. No repeating the headline in the body. No emojis.
+- Write for developers: tooling, APIs, startups, shipping, building. When in doubt, focus on "what can I do with this?"
+
+FORMATTING:
+- Clean Markdown. ## for each story headline. **What happened:** and **Why it matters:** and **Context:** as bold labels.
+- One blank line between sections. No extra commentary — only the article.
+
+Output only the Markdown article. Nothing else.`;
 
   return await generateText(prompt);
 }
