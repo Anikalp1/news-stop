@@ -54,7 +54,7 @@ export default {
 
       if (res.status === 204) {
         return new Response(approvedHtml(file), {
-          headers: { 'Content-Type': 'text/html' },
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
         });
       } else {
         const body = await res.text();
@@ -83,7 +83,7 @@ export default {
       );
 
       return new Response(rejectedHtml(file), {
-        headers: { 'Content-Type': 'text/html' },
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
 
@@ -93,8 +93,9 @@ export default {
 
 function approvedHtml(file) {
   return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Article Approved</title>
   <style>
@@ -108,9 +109,9 @@ function approvedHtml(file) {
 </head>
 <body>
   <div class="card">
-    <div class="icon">✅</div>
+    <div class="icon">&#10003;</div>
     <h1>Article Approved!</h1>
-    <p>Publishing to Medium now. This usually takes 1–2 minutes.</p>
+    <p>Publishing to Dev.to now. This usually takes 1-2 minutes.</p>
     <small>${file}</small>
   </div>
 </body>
@@ -119,8 +120,9 @@ function approvedHtml(file) {
 
 function rejectedHtml(file) {
   return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Article Rejected</title>
   <style>
@@ -134,7 +136,7 @@ function rejectedHtml(file) {
 </head>
 <body>
   <div class="card">
-    <div class="icon">❌</div>
+    <div class="icon">&#10007;</div>
     <h1>Article Rejected</h1>
     <p>Draft has been discarded. A new one will be generated tomorrow.</p>
     <small>${file}</small>

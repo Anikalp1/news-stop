@@ -28,6 +28,7 @@ export function markAsPublished(draftPath) {
   const content = fs.readFileSync(draftPath, 'utf8');
   const updated = content.replace('status: "draft"', 'status: "published"');
 
+  fs.mkdirSync('published', { recursive: true });
   fs.writeFileSync(publishedPath, updated, 'utf8');
   fs.unlinkSync(draftPath);
 
@@ -36,6 +37,9 @@ export function markAsPublished(draftPath) {
 }
 
 export function getLatestDraft() {
+  if (!fs.existsSync('drafts')) {
+    return null;
+  }
   const drafts = fs
     .readdirSync('drafts')
     .filter((f) => f.endsWith('.md'))
