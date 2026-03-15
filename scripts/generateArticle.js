@@ -135,9 +135,12 @@ ${news.map((n, i) => `${i + 1}. ${n.title}\n   Source: ${n.source}\n   Summary: 
 
 REQUIRED ARTICLE STRUCTURE:
 
+Start with exactly one line: # Daily AI News — ${dateStr}
+Then immediately the intro paragraph (no duplicate title, no hashtags, no tags).
+
 # Daily AI News — ${dateStr}
 
-[2–3 sentence intro: what’s happening in AI. Short, sharp, contextual. Do NOT repeat the date or say "today" — the date is already in the heading above. No "In today’s news" or "Welcome to today’s digest."]
+[2–3 sentence intro: what’s happening in AI. Short, sharp, contextual. Do NOT repeat the date or say "today" — the date is already in the heading. Do NOT repeat the title as text. Do NOT add hashtags or tags (no # technology, # programming, # ai, etc.). Go straight into the intro. Then ## for first story.]
 
 Then for each story, use this exact structure:
 
@@ -166,8 +169,10 @@ STYLE RULES (strict):
 - Write for developers: tooling, APIs, startups, shipping, building. When in doubt, focus on "what can I do with this?"
 
 FORMATTING:
-- Clean Markdown. ## for each story headline. **What happened:** and **Why it matters:** and **Context:** as bold labels.
-- One blank line between sections. No extra commentary — only the article.
+- Clean Markdown. Exactly one # heading at the top (the title). Then ## for each story headline. **What happened:** and **Why it matters:** and **Context:** as bold labels.
+- One blank line between sections. No hashtags, no tags, no keywords. No extra commentary — only the article.
+
+Do NOT add: hashtags (# technology, # ai, etc.), duplicate title text, or a Sources line (we add it automatically).
 
 Output only the Markdown article. Nothing else.`;
 
@@ -183,10 +188,33 @@ export async function generateArticle(newsItems) {
 
   console.log('Writing short digest...');
   let content = await writeDigest(topic);
+
+  // Remove common model mistakes: hashtag-only lines and duplicate title as plain text
+  const titleLine = `Daily AI News — ${new Date().toISOString().split('T')[0]}`;
+  content = content
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return true;
+      if (t.startsWith('*Sources:') || t.startsWith('Sources:')) return false;
+      if (t === titleLine && !t.startsWith('#')) return false;
+      if (/^#\s*[a-z]+(\s*#\s*[a-z]+)*\s*$/i.test(t)) return false;
+      return true;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd();
+
   const news = topic.selectedNews || [];
   if (news.length > 0) {
-    const sourcesLine = news.map((n) => `[${n.source}](${n.link})`).join(', ');
-    content = `${content.trimEnd()}\n\n---\n*Sources: ${sourcesLine}*`;
+    const seen = new Set();
+    const uniqueSources = news.filter((n) => {
+      if (seen.has(n.source)) return false;
+      seen.add(n.source);
+      return true;
+    });
+    const sourcesLine = uniqueSources.map((n) => `[${n.source}](${n.link})`).join(', ');
+    content = `${content}\n\n---\n*Sources: ${sourcesLine}*`;
   }
   console.log(`Digest generated (${content.length} chars)`);
 
