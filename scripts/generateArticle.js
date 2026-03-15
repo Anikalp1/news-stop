@@ -9,19 +9,19 @@ function formatNewsForPrompt(newsItems) {
 }
 
 async function selectTopic(newsItems) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-  const prompt = `You are an AI technology writer for software engineers and developers.
+  const prompt = `You are a tech writer who tells stories, not a corporate blog. Pick one story from the headlines below that would make a great read for developers — something with a real narrative, stakes, or a bit of absurdity.
 
-Below are the latest AI news headlines from the past 48 hours:
+Latest AI news (past 48 hours):
 
 ${formatNewsForPrompt(newsItems)}
 
-Select the single most interesting and technically relevant topic for software engineers.
+Choose the single most interesting, technically relevant topic. The title should sound like a story or a hook a human would click, not a generic "X Explained" or "The Future of Y."
 
-Respond in this exact format (no extra text):
-TITLE: [compelling Medium article title]
-SUMMARY: [2-3 sentence summary of what the article will cover]
+Respond in this exact format (no extra text, no emojis):
+TITLE: [story-like or punchy title, no emojis]
+SUMMARY: [2-3 sentences: what happened and why a dev would care]
 POINTS:
 - [key point 1]
 - [key point 2]
@@ -55,9 +55,9 @@ SLUG: [url-friendly-slug-with-hyphens]`;
 }
 
 async function writeArticle(topic, newsItems) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-  const prompt = `Write a high-quality Medium article for software engineers and developers.
+  const prompt = `Write an article that reads like a human tech writer wrote it — a story with a voice, not a textbook or a press release.
 
 Title: ${topic.title}
 
@@ -69,40 +69,37 @@ ${topic.points.map((p) => `- ${p}`).join('\n')}
 Related news context:
 ${formatNewsForPrompt(newsItems.slice(0, 5))}
 
-Requirements:
-- 1000–1500 words
-- Valid Markdown formatting
-- Sections with ## headings
-- Developer perspective throughout
-- Explain the technical implications clearly
-- Include practical insights developers can act on
-- Avoid generic AI hype — be specific and insightful
-- No filler phrases like "In conclusion" or "It's worth noting"
+VOICE AND STYLE (non-negotiable):
+- Write like you're telling someone the story over coffee. Narrative flow, not bullet points in disguise.
+- No emojis anywhere in the article. None.
+- Add dry wit or light jokes where they fit the news — an observation, a gentle jab at hype, a relatable dev moment. Don't force it; the news stays central. Humor should feel natural, not tacked on.
+- Sound like a knowledgeable friend, not a brand or an AI. Use "you" and concrete examples. Short sentences are fine. Vary rhythm.
+- Do NOT use: "In conclusion," "It's worth noting," "Furthermore," "In today's rapidly evolving landscape," "delve," "leverage," "utilize," "game-changer," "revolutionize," "Let's dive in," or any phrase that screams generic AI blog. No recapping the intro at the end.
+- Do NOT structure every section as a list of three bullet-like paragraphs. Prose should flow; use headings to break the story, not to announce report sections.
+- 1000–1500 words. Valid Markdown. ## for section headings. Developer angle and technical implications throughout, but explained through the story.
 
-Structure:
+Structure (use these as narrative beats, not report headers):
 # [Title]
 
-[Introduction — hook the reader with why this matters right now]
+[Open with a hook: a scene, a question, or a punchy take. Why should a dev care right now?]
 
-## What Happened
+## What Actually Happened
 
-[Factual summary of the news/development]
+[Tell the story of the news — what happened, who did it, why it showed up on the radar. Facts first, then why it’s a bit ridiculous or exciting.]
 
-## Why It Matters for Developers
+## Why This Actually Matters
 
-[Technical implications, what changes, what to watch]
+[Technical implications and what changes for developers. Be specific. No vague "the industry will evolve."]
 
-## What You Should Do
+## What You Can Do About It
 
-[Practical steps, tools to try, things to learn]
+[Practical stuff: what to try, what to read, what to ignore. Straight talk.]
 
-## The Bigger Picture
+## Where This Is Going
 
-[Broader industry context and future direction]
+[Bigger context or where this leads — one or two tight paragraphs. No grand "the future is bright" finale.]
 
-## Final Thoughts
-
-[Short, punchy conclusion]
+[Last paragraph: land the plane. One sharp observation or takeaway, not a summary of the article.]
 
 ---
 *Sources: ${newsItems
@@ -110,7 +107,7 @@ Structure:
     .map((n) => `[${n.source}](${n.link})`)
     .join(', ')}*
 
-Write the full article now in Markdown:`;
+Write the full article in Markdown. No emojis. Story first, facts woven in.`;
 
   const result = await model.generateContent(prompt);
   return result.response.text().trim();
