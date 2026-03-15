@@ -2,6 +2,31 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// Use Flash-Lite: higher free-tier quota (15 RPM, 1000 RPD vs Flash 10 RPM, 250 RPD)
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generateWithRetry(model, prompt, maxRetries = 2) {
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      const result = await model.generateContent(prompt);
+      return result.response.text().trim();
+    } catch (err) {
+      const is429 = err.message && err.message.includes('429');
+      if (is429 && attempt <= maxRetries) {
+        const waitSec = 25;
+        console.log(`Rate limited (429). Waiting ${waitSec}s before retry ${attempt}/${maxRetries}...`);
+        await sleep(waitSec * 1000);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 function formatNewsForPrompt(newsItems) {
   return newsItems
     .map((item, i) => `${i + 1}. ${item.title}\n   Source: ${item.source}\n   ${item.summary}`)
@@ -9,7 +34,7 @@ function formatNewsForPrompt(newsItems) {
 }
 
 async function selectTopic(newsItems) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({ model: MODEL });
 
   const prompt = `You are a tech writer who tells stories, not a corporate blog. Pick one story from the headlines below that would make a great read for developers — something with a real narrative, stakes, or a bit of absurdity.
 
@@ -29,8 +54,7 @@ POINTS:
 - [key point 4]
 SLUG: [url-friendly-slug-with-hyphens]`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+  const text = await generateWithRetry(model, prompt);
 
   const titleMatch = text.match(/TITLE:\s*(.+)/);
   const summaryMatch = text.match(/SUMMARY:\s*(.+?)(?=\nPOINTS:|\nSLUG:)/s);
@@ -55,7 +79,7 @@ SLUG: [url-friendly-slug-with-hyphens]`;
 }
 
 async function writeArticle(topic, newsItems) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: MODEL });
 
   const prompt = `Write an article that reads like a human tech writer wrote it — a story with a voice, not a textbook or a press release.
 
@@ -109,14 +133,16 @@ Structure (use these as narrative beats, not report headers):
 
 Write the full article in Markdown. No emojis. Story first, facts woven in.`;
 
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+  return await generateWithRetry(model, prompt);
 }
 
 export async function generateArticle(newsItems) {
-  console.log('Selecting best topic with Gemini...');
+  console.log(`Selecting best topic with Gemini (${MODEL})...`);
   const topic = await selectTopic(newsItems);
   console.log(`Selected topic: "${topic.title}"`);
+
+  // Short delay between calls to avoid bursting RPM limit
+  await sleep(3000);
 
   console.log('Generating article...');
   const content = await writeArticle(topic, newsItems);
