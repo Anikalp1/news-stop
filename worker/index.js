@@ -4,14 +4,20 @@
  * Deploy free at: https://workers.cloudflare.com
  * Set these environment variables in the Worker settings:
  *   WEBHOOK_SECRET  — a random secret string (same as in GitHub Secrets)
- *   GITHUB_PAT      — GitHub Personal Access Token with repo + actions:write scope
+ *   GITHUB_PAT      — GitHub PAT that can trigger workflows (see below)
  *   GITHUB_REPO     — e.g. "yourusername/news-stop"
+ *   GITHUB_REF      — (optional) branch to run workflow on, default "main"
+ *
+ * GITHUB_PAT must be able to trigger workflow_dispatch:
+ *   Classic PAT: enable scope "workflow" (and "repo" for private repos).
+ *   Fine-grained PAT: Repository access = This repository; Permissions: Actions = Read and write, Contents = Read and write, Metadata = Read-only.
  */
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const action = url.pathname.replace('/', '');
+    // First path segment (handles /approve, //approve, etc.)
+    const action = url.pathname.split('/').filter(Boolean)[0] || '';
     const file = url.searchParams.get('file');
     const secret = url.searchParams.get('secret');
 
@@ -24,6 +30,8 @@ export default {
       return new Response('Missing file parameter', { status: 400 });
     }
 
+    const ref = env.GITHUB_REF || 'main';
+
     if (action === 'approve') {
       // Trigger the publish workflow via GitHub API
       const res = await fetch(
@@ -34,10 +42,11 @@ export default {
             Authorization: `Bearer ${env.GITHUB_PAT}`,
             Accept: 'application/vnd.github+json',
             'Content-Type': 'application/json',
+            'User-Agent': 'news-stop-approve-worker',
             'X-GitHub-Api-Version': '2022-11-28',
           },
           body: JSON.stringify({
-            ref: 'master',
+            ref,
             inputs: { draft_filename: file },
           }),
         }
@@ -63,10 +72,11 @@ export default {
             Authorization: `Bearer ${env.GITHUB_PAT}`,
             Accept: 'application/vnd.github+json',
             'Content-Type': 'application/json',
+            'User-Agent': 'news-stop-approve-worker',
             'X-GitHub-Api-Version': '2022-11-28',
           },
           body: JSON.stringify({
-            ref: 'master',
+            ref,
             inputs: { draft_filename: file },
           }),
         }

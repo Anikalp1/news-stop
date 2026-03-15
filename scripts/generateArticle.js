@@ -1,51 +1,20 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
 
-const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const GROQ_KEY = process.env.GROQ_API_KEY;
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 
-const OPENAI_MODEL =  'gpt-4o-mini';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
-const GEMINI_MODEL = 'gemini-2.0-flash-lite';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+// OpenRouter: default openrouter/free; override with OPENROUTER_MODEL
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/free';
 
-const openai = OPENAI_KEY ? new OpenAI({ apiKey: OPENAI_KEY }) : null;
 const groq = GROQ_KEY ? new Groq({ apiKey: GROQ_KEY }) : null;
-const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
+const openrouter = OPENROUTER_KEY
+  ? new OpenAI({ apiKey: OPENROUTER_KEY, baseURL: 'https://openrouter.ai/api/v1' })
+  : null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getProviderName() {
-  if (OPENAI_KEY) return `OpenAI (${OPENAI_MODEL})`;
-  if (GROQ_KEY) return `Groq (${GROQ_MODEL})`;
-  if (GEMINI_KEY) return `Gemini (${GEMINI_MODEL})`;
-  return null;
-}
-
-async function generateWithOpenAI(prompt, maxRetries = 2) {
-  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-    try {
-      const completion = await openai.chat.completions.create({
-        model: OPENAI_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-      });
-      const text = completion.choices[0]?.message?.content?.trim();
-      if (!text) throw new Error('OpenAI returned empty response');
-      return text;
-    } catch (err) {
-      const is429 = err.status === 429 || (err.message && err.message.includes('429'));
-      if (is429 && attempt <= maxRetries) {
-        console.log(`Rate limited (429). Waiting 30s before retry ${attempt}/${maxRetries}...`);
-        await sleep(30000);
-        continue;
-      }
-      throw err;
-    }
-  }
 }
 
 async function generateWithGroq(prompt, maxRetries = 2) {
@@ -62,7 +31,7 @@ async function generateWithGroq(prompt, maxRetries = 2) {
     } catch (err) {
       const is429 = err.status === 429 || (err.message && err.message.includes('429'));
       if (is429 && attempt <= maxRetries) {
-        console.log(`Rate limited (429). Waiting 30s before retry ${attempt}/${maxRetries}...`);
+        console.log(`Groq rate limited (429). Waiting 30s before retry ${attempt}/${maxRetries}...`);
         await sleep(30000);
         continue;
       }
@@ -71,17 +40,22 @@ async function generateWithGroq(prompt, maxRetries = 2) {
   }
 }
 
-async function generateWithGemini(prompt, maxRetries = 2) {
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+async function generateWithOpenRouter(prompt, maxRetries = 2) {
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
-      return result.response.text().trim();
+      const completion = await openrouter.chat.completions.create({
+        model: OPENROUTER_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+      });
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (!text) throw new Error('OpenRouter returned empty response');
+      return text;
     } catch (err) {
-      const is429 = err.message && err.message.includes('429');
+      const is429 = err.status === 429 || (err.message && err.message.includes('429'));
       if (is429 && attempt <= maxRetries) {
-        console.log(`Rate limited (429). Waiting 25s before retry ${attempt}/${maxRetries}...`);
-        await sleep(25000);
+        console.log(`OpenRouter rate limited (429). Waiting 30s before retry ${attempt}/${maxRetries}...`);
+        await sleep(30000);
         continue;
       }
       throw err;
@@ -89,13 +63,28 @@ async function generateWithGemini(prompt, maxRetries = 2) {
   }
 }
 
+/** Try Groq first; on failure, fall back to OpenRouter if key is set. */
 async function generateText(prompt) {
-  if (OPENAI_KEY) return generateWithOpenAI(prompt);
-  if (GROQ_KEY) return generateWithGroq(prompt);
-  if (GEMINI_KEY) return generateWithGemini(prompt);
-  throw new Error(
-    'Set one of: OPENAI_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY in .env or GitHub Secrets.'
-  );
+  if (GROQ_KEY) {
+    try {
+      return await generateWithGroq(prompt);
+    } catch (err) {
+      if (OPENROUTER_KEY) {
+        console.log('Groq failed, falling back to OpenRouter...');
+        return await generateWithOpenRouter(prompt);
+      }
+      throw err;
+    }
+  }
+  if (OPENROUTER_KEY) return await generateWithOpenRouter(prompt);
+  throw new Error('Set GROQ_API_KEY and/or OPENROUTER_API_KEY in .env or GitHub Secrets.');
+}
+
+function getProviderName() {
+  if (GROQ_KEY && OPENROUTER_KEY) return `Groq (${GROQ_MODEL}) → OpenRouter (${OPENROUTER_MODEL}) fallback`;
+  if (GROQ_KEY) return `Groq (${GROQ_MODEL})`;
+  if (OPENROUTER_KEY) return `OpenRouter (${OPENROUTER_MODEL})`;
+  return null;
 }
 
 function formatNewsForPrompt(newsItems) {
@@ -205,12 +194,10 @@ Write the full article in Markdown. No emojis. Story first, facts woven in.`;
 
 export async function generateArticle(newsItems) {
   const provider = getProviderName();
-  if (!provider) throw new Error('No API key set. Use OPENAI_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY.');
+  if (!provider) throw new Error('No API key set. Use GROQ_API_KEY and/or OPENROUTER_API_KEY.');
   console.log(`Selecting best topic with ${provider}...`);
   const topic = await selectTopic(newsItems);
   console.log(`Selected topic: "${topic.title}"`);
-
-  if (GEMINI_KEY) await sleep(3000);
 
   console.log('Generating article...');
   const content = await writeArticle(topic, newsItems);

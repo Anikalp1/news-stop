@@ -82,10 +82,13 @@ export async function sendReviewEmail(draft) {
   // Simplest working approach: GitHub token in URL via a redirect worker
   const approveLink = `https://api.github.com/repos/${process.env.GITHUB_REPO}/actions/workflows/publish.yml/dispatches`;
 
+  // Avoid double slash when APPROVE_BASE_URL has a trailing slash
+  const baseUrl = (process.env.APPROVE_BASE_URL || '').replace(/\/+$/, '');
+
   const html = buildEmailHtml(
     draft,
-    `${process.env.APPROVE_BASE_URL}/approve?file=${encodeURIComponent(draft.filename)}&secret=${process.env.WEBHOOK_SECRET}`,
-    `${process.env.APPROVE_BASE_URL}/reject?file=${encodeURIComponent(draft.filename)}&secret=${process.env.WEBHOOK_SECRET}`
+    `${baseUrl}/approve?file=${encodeURIComponent(draft.filename)}&secret=${process.env.WEBHOOK_SECRET}`,
+    `${baseUrl}/reject?file=${encodeURIComponent(draft.filename)}&secret=${process.env.WEBHOOK_SECRET}`
   );
 
   await transporter.sendMail({

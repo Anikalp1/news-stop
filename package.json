@@ -9,7 +9,6 @@
     "test-email": "node scripts/sendReviewEmail.js --test"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "groq-sdk": "^0.37.0",
