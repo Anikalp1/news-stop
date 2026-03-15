@@ -16,6 +16,7 @@ status: "draft"
 
 `;
 
+  fs.mkdirSync('drafts', { recursive: true });
   fs.writeFileSync(filepath, frontmatter + content, 'utf8');
   console.log(`Draft saved: ${filepath}`);
   return { filename, filepath };
