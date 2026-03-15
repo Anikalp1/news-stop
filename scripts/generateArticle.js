@@ -9,7 +9,7 @@ function formatNewsForPrompt(newsItems) {
 }
 
 async function selectTopic(newsItems) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const prompt = `You are a tech writer who tells stories, not a corporate blog. Pick one story from the headlines below that would make a great read for developers — something with a real narrative, stakes, or a bit of absurdity.
 
