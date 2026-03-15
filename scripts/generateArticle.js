@@ -184,9 +184,10 @@ export async function generateArticle(newsItems) {
   console.log('Writing short digest...');
   let content = await writeDigest(topic);
 
-  // Remove common model mistakes: hashtag-only lines, duplicate H1, model-added Sources, standalone date
+  // Remove common model mistakes: duplicate headline (H1 or plain-text repeat), hashtag lines, Sources, date
   const dateStr = new Date().toISOString().split('T')[0];
   let seenH1 = false;
+  let h1TitleText = '';
   content = content
     .split('\n')
     .filter((line) => {
@@ -196,8 +197,10 @@ export async function generateArticle(newsItems) {
       if (t.startsWith('# ')) {
         if (seenH1) return false;
         seenH1 = true;
+        h1TitleText = t.slice(2).trim();
         return true;
       }
+      if (h1TitleText && t === h1TitleText) return false;
       if (/^#\s*[a-z]+(\s*#\s*[a-z]+)*\s*$/i.test(t)) return false;
       if (t === dateStr) return false;
       return true;

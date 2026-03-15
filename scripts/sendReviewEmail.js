@@ -14,7 +14,9 @@ function buildApproveUrl(filename) {
 
 /** Strip frontmatter and return article body only. */
 function getArticleBody(content) {
-  return content.replace(/^---[\s\S]+?---\n/m, '').trim();
+  const body = content.replace(/^---[\s\S]+?---\n/m, '').trim();
+  // Remove the leading H1 — it's already shown as the .title above the article
+  return body.replace(/^#\s+.+\n?/, '').trim();
 }
 
 async function buildEmailHtml(draft, approveUrl, rejectUrl) {
