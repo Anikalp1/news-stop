@@ -2,8 +2,8 @@ name: Daily Article Generation
 
 on:
   schedule:
-    # 8:00 PM IST = 14:30 UTC
-    - cron: '30 14 * * *'
+    # 11:30 PM IST = 18:00 UTC
+    - cron: '0 18 * * *'
   workflow_dispatch: # allow manual trigger
 
 jobs:

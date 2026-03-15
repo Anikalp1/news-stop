@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { marked } from 'marked';
 import { getLatestDraft } from './saveDraft.js';
 
 function buildApproveUrl(filename) {
@@ -11,27 +12,39 @@ function buildApproveUrl(filename) {
   return `https://approve.news-stop.workers.dev/approve?file=${encodeURIComponent(filename)}&token=${token}`;
 }
 
-function buildEmailHtml(draft, approveUrl, rejectUrl) {
-  const preview = draft.content
-    .replace(/^---[\s\S]+?---\n/m, '')
-    .replace(/#{1,6}\s/g, '')
-    .trim()
-    .slice(0, 500);
+/** Strip frontmatter and return article body only. */
+function getArticleBody(content) {
+  return content.replace(/^---[\s\S]+?---\n/m, '').trim();
+}
+
+async function buildEmailHtml(draft, approveUrl, rejectUrl) {
+  const articleBody = getArticleBody(draft.content);
+  const articleHtml = await marked.parse(articleBody);
 
   return `
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #333; }
     .header { background: #1a1a2e; color: white; padding: 24px; border-radius: 8px 8px 0 0; }
     .header h1 { margin: 0; font-size: 18px; }
     .header p { margin: 8px 0 0; opacity: 0.7; font-size: 14px; }
     .body { background: #f9f9f9; padding: 24px; border: 1px solid #e0e0e0; }
-    .title { font-size: 22px; font-weight: bold; color: #1a1a2e; margin-bottom: 12px; }
-    .summary { color: #555; line-height: 1.6; margin-bottom: 16px; }
-    .preview { background: white; border-left: 3px solid #1a1a2e; padding: 16px; font-size: 14px; color: #666; line-height: 1.6; }
+    .title { font-size: 22px; font-weight: bold; color: #1a1a2e; margin-bottom: 8px; }
+    .summary { color: #555; line-height: 1.5; margin-bottom: 20px; font-size: 14px; }
+    .article { background: white; padding: 20px; font-size: 15px; line-height: 1.6; color: #333; }
+    .article h1 { font-size: 20px; margin: 24px 0 12px; color: #1a1a2e; }
+    .article h1:first-child { margin-top: 0; }
+    .article h2 { font-size: 17px; margin: 20px 0 8px; color: #1a1a2e; }
+    .article p { margin: 0 0 12px; }
+    .article strong { font-weight: 600; }
+    .article a { color: #2563eb; text-decoration: none; }
+    .article a:hover { text-decoration: underline; }
+    .article hr { border: none; border-top: 1px solid #e5e7eb; margin: 20px 0; }
+    .article ul, .article ol { margin: 0 0 12px; padding-left: 24px; }
     .actions { padding: 24px; text-align: center; background: white; border: 1px solid #e0e0e0; border-top: none; }
     .btn { display: inline-block; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 0 8px; }
     .approve { background: #16a34a; color: white; }
@@ -48,7 +61,7 @@ function buildEmailHtml(draft, approveUrl, rejectUrl) {
   <div class="body">
     <div class="title">${draft.title}</div>
     <div class="summary">${draft.summary}</div>
-    <div class="preview">${preview}...</div>
+    <div class="article">${articleHtml}</div>
   </div>
   <div class="actions">
     <a href="${approveUrl}" class="btn approve">Approve &amp; Publish</a>
@@ -85,7 +98,7 @@ export async function sendReviewEmail(draft) {
   // Avoid double slash when APPROVE_BASE_URL has a trailing slash
   const baseUrl = (process.env.APPROVE_BASE_URL || '').replace(/\/+$/, '');
 
-  const html = buildEmailHtml(
+  const html = await buildEmailHtml(
     draft,
     `${baseUrl}/approve?file=${encodeURIComponent(draft.filename)}&secret=${process.env.WEBHOOK_SECRET}`,
     `${baseUrl}/reject?file=${encodeURIComponent(draft.filename)}&secret=${process.env.WEBHOOK_SECRET}`
