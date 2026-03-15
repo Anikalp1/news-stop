@@ -1,15 +1,33 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
-// Use Flash-Lite: higher free-tier quota (15 RPM, 1000 RPD vs Flash 10 RPM, 250 RPD)
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
+const USE_OPENAI = !!OPENAI_KEY;
+const OPENAI_MODEL = 'gpt-4o-mini';
+const GEMINI_MODEL = 'gemini-2.0-flash-lite';
+
+const openai = OPENAI_KEY ? new OpenAI({ apiKey: OPENAI_KEY }) : null;
+const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generateWithRetry(model, prompt, maxRetries = 2) {
+async function generateWithOpenAI(prompt) {
+  const completion = await openai.chat.completions.create({
+    model: OPENAI_MODEL,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.7,
+  });
+  const text = completion.choices[0]?.message?.content?.trim();
+  if (!text) throw new Error('OpenAI returned empty response');
+  return text;
+}
+
+async function generateWithGemini(prompt, maxRetries = 2) {
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
       const result = await model.generateContent(prompt);
@@ -17,14 +35,21 @@ async function generateWithRetry(model, prompt, maxRetries = 2) {
     } catch (err) {
       const is429 = err.message && err.message.includes('429');
       if (is429 && attempt <= maxRetries) {
-        const waitSec = 25;
-        console.log(`Rate limited (429). Waiting ${waitSec}s before retry ${attempt}/${maxRetries}...`);
-        await sleep(waitSec * 1000);
+        console.log(`Rate limited (429). Waiting 25s before retry ${attempt}/${maxRetries}...`);
+        await sleep(25000);
         continue;
       }
       throw err;
     }
   }
+}
+
+async function generateText(prompt) {
+  if (USE_OPENAI) return generateWithOpenAI(prompt);
+  if (genAI) return generateWithGemini(prompt);
+  throw new Error(
+    'Set OPENAI_API_KEY (recommended) or GEMINI_API_KEY in .env or GitHub Secrets.'
+  );
 }
 
 function formatNewsForPrompt(newsItems) {
@@ -34,8 +59,6 @@ function formatNewsForPrompt(newsItems) {
 }
 
 async function selectTopic(newsItems) {
-  const model = genAI.getGenerativeModel({ model: MODEL });
-
   const prompt = `You are a tech writer who tells stories, not a corporate blog. Pick one story from the headlines below that would make a great read for developers — something with a real narrative, stakes, or a bit of absurdity.
 
 Latest AI news (past 48 hours):
@@ -54,7 +77,7 @@ POINTS:
 - [key point 4]
 SLUG: [url-friendly-slug-with-hyphens]`;
 
-  const text = await generateWithRetry(model, prompt);
+  const text = await generateText(prompt);
 
   const titleMatch = text.match(/TITLE:\s*(.+)/);
   const summaryMatch = text.match(/SUMMARY:\s*(.+?)(?=\nPOINTS:|\nSLUG:)/s);
@@ -79,8 +102,6 @@ SLUG: [url-friendly-slug-with-hyphens]`;
 }
 
 async function writeArticle(topic, newsItems) {
-  const model = genAI.getGenerativeModel({ model: MODEL });
-
   const prompt = `Write an article that reads like a human tech writer wrote it — a story with a voice, not a textbook or a press release.
 
 Title: ${topic.title}
@@ -109,7 +130,7 @@ Structure (use these as narrative beats, not report headers):
 
 ## What Actually Happened
 
-[Tell the story of the news — what happened, who did it, why it showed up on the radar. Facts first, then why it’s a bit ridiculous or exciting.]
+[Tell the story of the news — what happened, who did it, why it showed up on the radar. Facts first, then why it's a bit ridiculous or exciting.]
 
 ## Why This Actually Matters
 
@@ -133,16 +154,16 @@ Structure (use these as narrative beats, not report headers):
 
 Write the full article in Markdown. No emojis. Story first, facts woven in.`;
 
-  return await generateWithRetry(model, prompt);
+  return await generateText(prompt);
 }
 
 export async function generateArticle(newsItems) {
-  console.log(`Selecting best topic with Gemini (${MODEL})...`);
+  const provider = USE_OPENAI ? `OpenAI (${OPENAI_MODEL})` : `Gemini (${GEMINI_MODEL})`;
+  console.log(`Selecting best topic with ${provider}...`);
   const topic = await selectTopic(newsItems);
   console.log(`Selected topic: "${topic.title}"`);
 
-  // Short delay between calls to avoid bursting RPM limit
-  await sleep(3000);
+  if (!USE_OPENAI) await sleep(3000);
 
   console.log('Generating article...');
   const content = await writeArticle(topic, newsItems);
