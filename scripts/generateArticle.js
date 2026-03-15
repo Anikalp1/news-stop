@@ -63,27 +63,27 @@ async function generateWithOpenRouter(prompt, maxRetries = 2) {
   }
 }
 
-/** Try Groq first; on failure, fall back to OpenRouter if key is set. */
+/** Try OpenRouter first; on failure, fall back to Groq if key is set. */
 async function generateText(prompt) {
-  if (GROQ_KEY) {
+  if (OPENROUTER_KEY) {
     try {
-      return await generateWithGroq(prompt);
+      return await generateWithOpenRouter(prompt);
     } catch (err) {
-      if (OPENROUTER_KEY) {
-        console.log('Groq failed, falling back to OpenRouter...');
-        return await generateWithOpenRouter(prompt);
+      if (GROQ_KEY) {
+        console.log('OpenRouter failed, falling back to Groq...');
+        return await generateWithGroq(prompt);
       }
       throw err;
     }
   }
-  if (OPENROUTER_KEY) return await generateWithOpenRouter(prompt);
-  throw new Error('Set GROQ_API_KEY and/or OPENROUTER_API_KEY in .env or GitHub Secrets.');
+  if (GROQ_KEY) return await generateWithGroq(prompt);
+  throw new Error('Set OPENROUTER_API_KEY and/or GROQ_API_KEY in .env or GitHub Secrets.');
 }
 
 function getProviderName() {
-  if (GROQ_KEY && OPENROUTER_KEY) return `Groq (${GROQ_MODEL}) → OpenRouter (${OPENROUTER_MODEL}) fallback`;
-  if (GROQ_KEY) return `Groq (${GROQ_MODEL})`;
+  if (OPENROUTER_KEY && GROQ_KEY) return `OpenRouter (${OPENROUTER_MODEL}) → Groq (${GROQ_MODEL}) fallback`;
   if (OPENROUTER_KEY) return `OpenRouter (${OPENROUTER_MODEL})`;
+  if (GROQ_KEY) return `Groq (${GROQ_MODEL})`;
   return null;
 }
 
@@ -189,16 +189,24 @@ export async function generateArticle(newsItems) {
   console.log('Writing short digest...');
   let content = await writeDigest(topic);
 
-  // Remove common model mistakes: hashtag-only lines and duplicate title as plain text
-  const titleLine = `Daily AI News — ${new Date().toISOString().split('T')[0]}`;
+  // Remove common model mistakes: hashtag-only lines, duplicate title, duplicate date
+  const dateStr = new Date().toISOString().split('T')[0];
+  const titleLine = `Daily AI News — ${dateStr}`;
+  const titleH1 = `# ${titleLine}`;
+  let seenTitle = false;
   content = content
     .split('\n')
     .filter((line) => {
       const t = line.trim();
       if (!t) return true;
       if (t.startsWith('*Sources:') || t.startsWith('Sources:')) return false;
-      if (t === titleLine && !t.startsWith('#')) return false;
+      if (t === titleH1 || t === titleLine) {
+        if (seenTitle) return false;
+        seenTitle = true;
+        return true;
+      }
       if (/^#\s*[a-z]+(\s*#\s*[a-z]+)*\s*$/i.test(t)) return false;
+      if (t === dateStr) return false;
       return true;
     })
     .join('\n')
