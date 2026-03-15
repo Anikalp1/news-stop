@@ -137,7 +137,7 @@ REQUIRED ARTICLE STRUCTURE:
 
 # Daily AI News — ${dateStr}
 
-[2–3 sentence intro: what’s happening in AI today. Short, sharp, contextual. Not generic. No "In today’s news" or "Welcome to today’s digest."]
+[2–3 sentence intro: what’s happening in AI. Short, sharp, contextual. Do NOT repeat the date or say "today" — the date is already in the heading above. No "In today’s news" or "Welcome to today’s digest."]
 
 Then for each story, use this exact structure:
 
@@ -162,7 +162,7 @@ STYLE RULES (strict):
 - Total length: 300–450 words. Every sentence must add information.
 - Clear, sharp, modern tech writing. Short sentences. Easy to skim in under 60 seconds.
 - Banned words and phrases: leverage, delve, revolutionary, groundbreaking, game-changing, utilize, "it’s worth noting," "in conclusion," "the landscape is evolving."
-- No filler. No repeating the headline in the body. No emojis.
+- No filler. No repeating the headline or the date in the body (date is only in the H1). No emojis.
 - Write for developers: tooling, APIs, startups, shipping, building. When in doubt, focus on "what can I do with this?"
 
 FORMATTING:
