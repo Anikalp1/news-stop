@@ -3,7 +3,7 @@ title: "Musk's AI Power Play: xAI Poaches Cursor Execs and Axes Coding Tool"
 date: "2026-03-15"
 slug: "musk-xai-poaches-cursor-execs-and-axes-coding-tool"
 summary: "In a surprise move, Elon Musk's xAI has scrapped its AI coding tool and poached executives from Cursor, a company reportedly in talks for funding at a $50 billion valuation. This development has significant implications for AI developers, as it signals a major shift in the industry's landscape. The move raises questions about the future of AI coding tools and the role of key players like xAI and Cursor."
-status: "draft"
+status: "published"
 ---
 
 # Musk's AI Power Play: xAI Poaches Cursor Execs and Axes Coding Tool
