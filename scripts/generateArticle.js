@@ -69,10 +69,7 @@ async function generateText(prompt) {
     try {
       return await generateWithOpenRouter(prompt);
     } catch (err) {
-      if (GROQ_KEY) {
-        console.log('OpenRouter failed, falling back to Groq...');
-        return await generateWithGroq(prompt);
-      }
+      if (GROQ_KEY) return await generateWithGroq(prompt);
       throw err;
     }
   }
@@ -135,12 +132,11 @@ ${news.map((n, i) => `${i + 1}. ${n.title}\n   Source: ${n.source}\n   Summary: 
 
 REQUIRED ARTICLE STRUCTURE:
 
-Start with exactly one line: # Daily AI News — ${dateStr}
-Then immediately the intro paragraph (no duplicate title, no hashtags, no tags).
+First line must be a single catchy H1 headline that combines the day’s themes into one punchy line. Do NOT include the date in the headline. Examples: "Cursor’s $50B Buzz and xAI’s Pivot" or "Mega Rounds, Agentic Finance, and a Scrapped Coding Tool". Make it specific to the stories below, not generic.
 
-# Daily AI News — ${dateStr}
+# [Your catchy one-line headline — no date]
 
-[2–3 sentence intro: what’s happening in AI. Short, sharp, contextual. Do NOT repeat the date or say "today" — the date is already in the heading. Do NOT repeat the title as text. Do NOT add hashtags or tags (no # technology, # programming, # ai, etc.). Go straight into the intro. Then ## for first story.]
+[2–3 sentence intro: what’s happening in AI. Short, sharp, contextual. Do NOT repeat the headline. Do NOT add the date or "today". No hashtags or tags (no # technology, # programming, # ai). Go straight into the intro, then ## for first story.]
 
 Then for each story, use this exact structure:
 
@@ -165,14 +161,14 @@ STYLE RULES (strict):
 - Total length: 300–450 words. Every sentence must add information.
 - Clear, sharp, modern tech writing. Short sentences. Easy to skim in under 60 seconds.
 - Banned words and phrases: leverage, delve, revolutionary, groundbreaking, game-changing, utilize, "it’s worth noting," "in conclusion," "the landscape is evolving."
-- No filler. No repeating the headline or the date in the body (date is only in the H1). No emojis.
+- No filler. No repeating the headline or adding the date in the body. No emojis.
 - Write for developers: tooling, APIs, startups, shipping, building. When in doubt, focus on "what can I do with this?"
 
 FORMATTING:
-- Clean Markdown. Exactly one # heading at the top (the title). Then ## for each story headline. **What happened:** and **Why it matters:** and **Context:** as bold labels.
+- Clean Markdown. Exactly one # heading at the top (your catchy headline, no date). Then ## for each story headline. **What happened:** and **Why it matters:** and **Context:** as bold labels.
 - One blank line between sections. No hashtags, no tags, no keywords. No extra commentary — only the article.
 
-Do NOT add: hashtags (# technology, # ai, etc.), duplicate title text, or a Sources line (we add it automatically).
+Do NOT add: the date anywhere, hashtags (# technology, # ai, etc.), duplicate headline text, or a Sources line (we add it automatically).
 
 Output only the Markdown article. Nothing else.`;
 
@@ -181,7 +177,6 @@ Output only the Markdown article. Nothing else.`;
 
 export async function generateArticle(newsItems) {
   const provider = getProviderName();
-  if (!provider) throw new Error('No API key set. Use GROQ_API_KEY and/or OPENROUTER_API_KEY.');
   console.log(`Selecting top stories for digest with ${provider}...`);
   const topic = await selectDigestTopic(newsItems);
   console.log(`Digest: "${topic.title}" (${topic.selectedNews?.length ?? 0} stories)`);
@@ -189,20 +184,18 @@ export async function generateArticle(newsItems) {
   console.log('Writing short digest...');
   let content = await writeDigest(topic);
 
-  // Remove common model mistakes: hashtag-only lines, duplicate title, duplicate date
+  // Remove common model mistakes: hashtag-only lines, duplicate H1, model-added Sources, standalone date
   const dateStr = new Date().toISOString().split('T')[0];
-  const titleLine = `Daily AI News — ${dateStr}`;
-  const titleH1 = `# ${titleLine}`;
-  let seenTitle = false;
+  let seenH1 = false;
   content = content
     .split('\n')
     .filter((line) => {
       const t = line.trim();
       if (!t) return true;
       if (t.startsWith('*Sources:') || t.startsWith('Sources:')) return false;
-      if (t === titleH1 || t === titleLine) {
-        if (seenTitle) return false;
-        seenTitle = true;
+      if (t.startsWith('# ')) {
+        if (seenH1) return false;
+        seenH1 = true;
         return true;
       }
       if (/^#\s*[a-z]+(\s*#\s*[a-z]+)*\s*$/i.test(t)) return false;
@@ -212,6 +205,11 @@ export async function generateArticle(newsItems) {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trimEnd();
+
+  // Use the generated H1 as the draft title (catchy headline)
+  const firstLine = content.split('\n')[0] || '';
+  const h1Match = firstLine.match(/^#\s+(.+)$/);
+  if (h1Match) topic.title = h1Match[1].trim();
 
   const news = topic.selectedNews || [];
   if (news.length > 0) {
