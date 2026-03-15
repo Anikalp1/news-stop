@@ -1,0 +1,45 @@
+name: Publish Approved Article
+
+on:
+  workflow_dispatch:
+    inputs:
+      draft_filename:
+        description: 'Draft filename to publish (e.g. 2026-03-15-ai-chip.md)'
+        required: false
+        default: ''
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Pull latest so we have the committed draft
+          ref: master
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish to Dev.to
+        env:
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+          DRAFT_FILENAME: ${{ github.event.inputs.draft_filename }}
+        run: node scripts/publish.js
+
+      - name: Commit published article
+        run: |
+          git config user.name "AI Medium Writer Bot"
+          git config user.email "bot@github-actions"
+          git add drafts/ published/
+          git diff --staged --quiet || git commit -m "published: $(date +%Y-%m-%d)"
+          git push

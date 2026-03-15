@@ -1,0 +1,45 @@
+name: Daily Article Generation
+
+on:
+  schedule:
+    # 8:00 PM IST = 14:30 UTC
+    - cron: '30 14 * * *'
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate article and send review email
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          APPROVE_BASE_URL: ${{ secrets.APPROVE_BASE_URL }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: node scripts/generate.js
+
+      - name: Commit draft to repository
+        run: |
+          git config user.name "AI Medium Writer Bot"
+          git config user.email "bot@github-actions"
+          git add drafts/
+          git diff --staged --quiet || git commit -m "draft: add daily article $(date +%Y-%m-%d)"
+          git push
