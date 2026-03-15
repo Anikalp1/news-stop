@@ -93,101 +93,44 @@ function formatNewsForPrompt(newsItems) {
     .join('\n\n');
 }
 
-async function selectTopic(newsItems) {
-  const prompt = `You are a tech writer who tells stories, not a corporate blog. Pick one story from the headlines below that would make a great read for developers — something with a real narrative, stakes, or a bit of absurdity.
+async function selectDigestTopic(newsItems) {
+  const prompt = `You are curating a short daily AI news digest for developers. Pick the 4–6 most important or relevant headlines from the list below — things a dev would want to know today. Skip duplicates or near-duplicates; prefer variety (products, research, policy, companies).
 
 Latest AI news (past 48 hours):
 
 ${formatNewsForPrompt(newsItems)}
 
-Choose the single most interesting, technically relevant topic. The title should sound like a story or a hook a human would click, not a generic "X Explained" or "The Future of Y."
-
-Respond in this exact format (no extra text, no emojis):
-TITLE: [story-like or punchy title, no emojis]
-SUMMARY: [2-3 sentences: what happened and why a dev would care]
-POINTS:
-- [key point 1]
-- [key point 2]
-- [key point 3]
-- [key point 4]
-SLUG: [url-friendly-slug-with-hyphens]`;
+Reply with only the line numbers of your chosen items, comma-separated (e.g. 1, 3, 5, 7, 9). No other text.`;
 
   const text = await generateText(prompt);
-
-  const titleMatch = text.match(/TITLE:\s*(.+)/);
-  const summaryMatch = text.match(/SUMMARY:\s*(.+?)(?=\nPOINTS:|\nSLUG:)/s);
-  const slugMatch = text.match(/SLUG:\s*(.+)/);
-  const pointsMatch = text.match(/POINTS:\n([\s\S]+?)(?=\nSLUG:)/);
-
-  const points = pointsMatch
-    ? pointsMatch[1]
-        .split('\n')
-        .filter((l) => l.trim().startsWith('-'))
-        .map((l) => l.replace(/^-\s*/, '').trim())
-    : [];
+  const numbers = (text.match(/\d+/g) || []).map(Number).filter((n) => n >= 1 && n <= newsItems.length);
+  const indices = [...new Set(numbers)].slice(0, 6).map((n) => n - 1);
+  const selected = indices.length > 0 ? indices.map((i) => newsItems[i]) : newsItems.slice(0, 5);
+  const dateStr = new Date().toISOString().split('T')[0];
 
   return {
-    title: titleMatch ? titleMatch[1].trim() : 'AI News Roundup',
-    summary: summaryMatch ? summaryMatch[1].trim() : '',
-    points,
-    slug: slugMatch
-      ? slugMatch[1].trim().toLowerCase().replace(/[^a-z0-9-]/g, '-')
-      : 'ai-article',
+    title: `Daily AI News — ${dateStr}`,
+    summary: `Brief roundup of the day's top AI stories. Skim in under a minute.`,
+    slug: `daily-ai-news-${dateStr}`,
+    points: [],
+    selectedNews: selected,
   };
 }
 
-async function writeArticle(topic, newsItems) {
-  const prompt = `Write an article that reads like a human tech writer wrote it — a story with a voice, not a textbook or a press release.
+async function writeDigest(topic) {
+  const news = topic.selectedNews || [];
+  const prompt = `Write a SHORT daily AI news digest. One quick skim, no fluff.
 
-Title: ${topic.title}
+Stories to cover (use these exact headlines as ## headings):
 
-Summary: ${topic.summary}
+${news.map((n, i) => `${i + 1}. ${n.title}\n   Source: ${n.source}\n   ${n.summary}`).join('\n\n')}
 
-Key points to cover:
-${topic.points.map((p) => `- ${p}`).join('\n')}
-
-Related news context:
-${formatNewsForPrompt(newsItems.slice(0, 5))}
-
-VOICE AND STYLE (non-negotiable):
-- Write like you're telling someone the story over coffee. Narrative flow, not bullet points in disguise.
-- No emojis anywhere in the article. None.
-- Add dry wit or light jokes where they fit the news — an observation, a gentle jab at hype, a relatable dev moment. Don't force it; the news stays central. Humor should feel natural, not tacked on.
-- Sound like a knowledgeable friend, not a brand or an AI. Use "you" and concrete examples. Short sentences are fine. Vary rhythm.
-- Do NOT use: "In conclusion," "It's worth noting," "Furthermore," "In today's rapidly evolving landscape," "delve," "leverage," "utilize," "game-changer," "revolutionize," "Let's dive in," or any phrase that screams generic AI blog. No recapping the intro at the end.
-- Do NOT structure every section as a list of three bullet-like paragraphs. Prose should flow; use headings to break the story, not to announce report sections.
-- 1000–1500 words. Valid Markdown. ## for section headings. Developer angle and technical implications throughout, but explained through the story.
-
-Structure (use these as narrative beats, not report headers):
-# [Title]
-
-[Open with a hook: a scene, a question, or a punchy take. Why should a dev care right now?]
-
-## What Actually Happened
-
-[Tell the story of the news — what happened, who did it, why it showed up on the radar. Facts first, then why it's a bit ridiculous or exciting.]
-
-## Why This Actually Matters
-
-[Technical implications and what changes for developers. Be specific. No vague "the industry will evolve."]
-
-## What You Can Do About It
-
-[Practical stuff: what to try, what to read, what to ignore. Straight talk.]
-
-## Where This Is Going
-
-[Bigger context or where this leads — one or two tight paragraphs. No grand "the future is bright" finale.]
-
-[Last paragraph: land the plane. One sharp observation or takeaway, not a summary of the article.]
-
----
-*Sources: ${newsItems
-    .slice(0, 3)
-    .map((n) => `[${n.source}](${n.link})`)
-    .join(', ')}*
-
-Write the full article in Markdown. No emojis. Story first, facts woven in.`;
+RULES (strict):
+- Total length: 250–400 words. Short and precise.
+- For each story: a ## heading (the headline), then 2–3 sentences only. What happened and why it matters to devs. No intros, no "in conclusion," no filler.
+- Plain language. No emojis. No "delve," "leverage," "game-changer," "revolutionize."
+- Output valid Markdown. Start with # ${topic.title}. Do not add a Sources line at the end (it will be added automatically).
+- Goal: reader skims in under a minute and gets the day's major AI news.`;
 
   return await generateText(prompt);
 }
@@ -195,13 +138,18 @@ Write the full article in Markdown. No emojis. Story first, facts woven in.`;
 export async function generateArticle(newsItems) {
   const provider = getProviderName();
   if (!provider) throw new Error('No API key set. Use GROQ_API_KEY and/or OPENROUTER_API_KEY.');
-  console.log(`Selecting best topic with ${provider}...`);
-  const topic = await selectTopic(newsItems);
-  console.log(`Selected topic: "${topic.title}"`);
+  console.log(`Selecting top stories for digest with ${provider}...`);
+  const topic = await selectDigestTopic(newsItems);
+  console.log(`Digest: "${topic.title}" (${topic.selectedNews?.length ?? 0} stories)`);
 
-  console.log('Generating article...');
-  const content = await writeArticle(topic, newsItems);
-  console.log(`Article generated (${content.length} chars)`);
+  console.log('Writing short digest...');
+  let content = await writeDigest(topic);
+  const news = topic.selectedNews || [];
+  if (news.length > 0) {
+    const sourcesLine = news.map((n) => `[${n.source}](${n.link})`).join(', ');
+    content = `${content.trimEnd()}\n\n---\n*Sources: ${sourcesLine}*`;
+  }
+  console.log(`Digest generated (${content.length} chars)`);
 
   return { topic, content };
 }
