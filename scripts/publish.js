@@ -1,20 +1,22 @@
 import 'dotenv/config';
-import { getLatestDraft, markAsPublished } from './saveDraft.js';
+import { getLatestDraft, getDraftByFilename, markAsPublished } from './saveDraft.js';
 import { publishToDevTo } from './publishToDevTo.js';
 
 async function main() {
-  const filename = process.env.DRAFT_FILENAME;
+  const filename = process.env.DRAFT_FILENAME?.trim() || undefined;
 
   console.log('=== AI Article Writer — Publishing ===\n');
 
-  const draft = getLatestDraft();
-  if (!draft) {
-    console.error('No drafts found to publish.');
-    process.exit(1);
-  }
+  const draft = filename
+    ? getDraftByFilename(filename)
+    : getLatestDraft();
 
-  if (filename && draft.filename !== filename) {
-    console.error(`Expected draft "${filename}" but found "${draft.filename}"`);
+  if (!draft) {
+    if (filename) {
+      console.error(`Draft "${filename}" not found in drafts/.`);
+    } else {
+      console.error('No drafts found to publish.');
+    }
     process.exit(1);
   }
 

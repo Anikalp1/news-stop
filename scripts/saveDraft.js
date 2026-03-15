@@ -64,3 +64,25 @@ export function getLatestDraft() {
     content,
   };
 }
+
+export function getDraftByFilename(filename) {
+  if (!filename || !fs.existsSync('drafts')) {
+    return null;
+  }
+  const filepath = path.join('drafts', filename);
+  if (!fs.existsSync(filepath)) {
+    return null;
+  }
+  const content = fs.readFileSync(filepath, 'utf8');
+  const titleMatch = content.match(/^title:\s*"(.+)"/m);
+  const slugMatch = content.match(/^slug:\s*"(.+)"/m);
+  const summaryMatch = content.match(/^summary:\s*"(.+)"/m);
+  return {
+    filepath,
+    filename,
+    title: titleMatch ? titleMatch[1] : 'Untitled',
+    slug: slugMatch ? slugMatch[1] : '',
+    summary: summaryMatch ? summaryMatch[1] : '',
+    content,
+  };
+}
