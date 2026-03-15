@@ -1,29 +1,74 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import OpenAI from 'openai';
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const GROQ_KEY = process.env.GROQ_API_KEY;
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
-const USE_OPENAI = !!OPENAI_KEY;
-const OPENAI_MODEL = 'gpt-4o-mini';
+const OPENAI_MODEL =  'gpt-4o-mini';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const GEMINI_MODEL = 'gemini-2.0-flash-lite';
 
 const openai = OPENAI_KEY ? new OpenAI({ apiKey: OPENAI_KEY }) : null;
+const groq = GROQ_KEY ? new Groq({ apiKey: GROQ_KEY }) : null;
 const genAI = GEMINI_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generateWithOpenAI(prompt) {
-  const completion = await openai.chat.completions.create({
-    model: OPENAI_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.7,
-  });
-  const text = completion.choices[0]?.message?.content?.trim();
-  if (!text) throw new Error('OpenAI returned empty response');
-  return text;
+function getProviderName() {
+  if (OPENAI_KEY) return `OpenAI (${OPENAI_MODEL})`;
+  if (GROQ_KEY) return `Groq (${GROQ_MODEL})`;
+  if (GEMINI_KEY) return `Gemini (${GEMINI_MODEL})`;
+  return null;
+}
+
+async function generateWithOpenAI(prompt, maxRetries = 2) {
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: OPENAI_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+      });
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (!text) throw new Error('OpenAI returned empty response');
+      return text;
+    } catch (err) {
+      const is429 = err.status === 429 || (err.message && err.message.includes('429'));
+      if (is429 && attempt <= maxRetries) {
+        console.log(`Rate limited (429). Waiting 30s before retry ${attempt}/${maxRetries}...`);
+        await sleep(30000);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+async function generateWithGroq(prompt, maxRetries = 2) {
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      const completion = await groq.chat.completions.create({
+        model: GROQ_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+      });
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (!text) throw new Error('Groq returned empty response');
+      return text;
+    } catch (err) {
+      const is429 = err.status === 429 || (err.message && err.message.includes('429'));
+      if (is429 && attempt <= maxRetries) {
+        console.log(`Rate limited (429). Waiting 30s before retry ${attempt}/${maxRetries}...`);
+        await sleep(30000);
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 async function generateWithGemini(prompt, maxRetries = 2) {
@@ -45,10 +90,11 @@ async function generateWithGemini(prompt, maxRetries = 2) {
 }
 
 async function generateText(prompt) {
-  if (USE_OPENAI) return generateWithOpenAI(prompt);
-  if (genAI) return generateWithGemini(prompt);
+  if (OPENAI_KEY) return generateWithOpenAI(prompt);
+  if (GROQ_KEY) return generateWithGroq(prompt);
+  if (GEMINI_KEY) return generateWithGemini(prompt);
   throw new Error(
-    'Set OPENAI_API_KEY (recommended) or GEMINI_API_KEY in .env or GitHub Secrets.'
+    'Set one of: OPENAI_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY in .env or GitHub Secrets.'
   );
 }
 
@@ -158,12 +204,13 @@ Write the full article in Markdown. No emojis. Story first, facts woven in.`;
 }
 
 export async function generateArticle(newsItems) {
-  const provider = USE_OPENAI ? `OpenAI (${OPENAI_MODEL})` : `Gemini (${GEMINI_MODEL})`;
+  const provider = getProviderName();
+  if (!provider) throw new Error('No API key set. Use OPENAI_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY.');
   console.log(`Selecting best topic with ${provider}...`);
   const topic = await selectTopic(newsItems);
   console.log(`Selected topic: "${topic.title}"`);
 
-  if (!USE_OPENAI) await sleep(3000);
+  if (GEMINI_KEY) await sleep(3000);
 
   console.log('Generating article...');
   const content = await writeArticle(topic, newsItems);
